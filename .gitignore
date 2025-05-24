@@ -44,3 +44,4 @@ bin/
 ### Mac OS ###
 .DS_Store
 pr-filler.main.jar
+node_modules
