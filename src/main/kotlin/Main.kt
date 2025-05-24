@@ -22,8 +22,9 @@ fun main(args: Array<String>) {
     // Welcome message
     println("🙏🏼 Welcome to PR Filler!")
 
-    // First arg is url
-    val prUrl = args.getOrNull(0) ?: run {
+    // Parse command line args
+    val parsedArgs = parseArgs(args)
+    val prUrl = parsedArgs["url"] ?: run {
         // Read PR URL from keyboard
         println("🔗 Please enter the URL of the pull request:")
         readLine() ?: run {
@@ -31,6 +32,9 @@ fun main(args: Array<String>) {
             return
         }
     }
+
+    // Get AI model from args or use default
+    val aiModel = parsedArgs["model"] ?: "gpt-4.1"
 
     // Validate the URL: eg: https://github.com/mycompany/mycompany-android-mobile/pull/9886
     if (!prUrl.matches(Regex("https://github\\.com/[^/]+/[^/]+/pull/[0-9]+"))) {
@@ -61,10 +65,10 @@ fun main(args: Array<String>) {
     val prBody = getPrBody(prUrl, githubApiKey)
 
     // Waiting message for openAI
-    println("🤖 Generating new PR body. This may take a moment...")
+    println("🤖 Generating new PR body using $aiModel. This may take a moment...")
 
     // Send prBody (template) and diffContent to openAi API
-    val filledPrBody = sendToOpenAiApi(prBody, diffContent, openAiApiKey)
+    val filledPrBody = sendToOpenAiApi(prBody, diffContent, openAiApiKey, aiModel)
 
     // Update the PR body on GitHub
     updatePrBody(prUrl, filledPrBody, githubApiKey)
@@ -103,9 +107,8 @@ fun updatePrBody(prUrl: String, filledPrBody: String, githubApiKey: String) {
     }
 }
 
-fun sendToOpenAiApi(prBody: String, diffContent: String, openAiApiKey: String): String {
+fun sendToOpenAiApi(prBody: String, diffContent: String, openAiApiKey: String, model: String = "gpt-4.1"): String {
     try {
-        val model = "gpt-4.1"
         val messages = JSONArray().apply {
             put(JSONObject().apply {
                 put("role", "system")
@@ -236,4 +239,44 @@ private fun getPrBody(prUrl: String, githubApiKey: String): String {
     println("✅ Fetched PR body successfully")
 
     return prBody
+}
+
+/**
+ * Parse command line arguments into a map of flag names to values
+ */
+private fun parseArgs(args: Array<String>): Map<String, String> {
+    val result = mutableMapOf<String, String>()
+    var i = 0
+    
+    while (i < args.size) {
+        when (args[i]) {
+            "--url", "-u" -> {
+                if (i + 1 < args.size) {
+                    result["url"] = args[i + 1]
+                    i += 2
+                } else {
+                    println("⚠️ Missing value for ${args[i]} flag")
+                    i++
+                }
+            }
+            "--model", "-m" -> {
+                if (i + 1 < args.size) {
+                    result["model"] = args[i + 1]
+                    i += 2
+                } else {
+                    println("⚠️ Missing value for ${args[i]} flag")
+                    i++
+                }
+            }
+            else -> {
+                // For backward compatibility, treat first positional arg as URL if not specified with a flag
+                if (!result.containsKey("url")) {
+                    result["url"] = args[i]
+                }
+                i++
+            }
+        }
+    }
+    
+    return result
 }

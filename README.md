@@ -37,12 +37,23 @@ pr-filler
 
 # With PR URL as argument
 pr-filler https://github.com/owner/repo/pull/123
+
+# With AI model specification
+pr-filler --url https://github.com/owner/repo/pull/123 --model gpt-4o
+
+# Using short flags
+pr-filler -u https://github.com/owner/repo/pull/123 -m gpt-3.5-turbo
 ```
+
+## Command-line flags
+
+- `--url, -u`: Specify the GitHub pull request URL
+- `--model, -m`: Specify the OpenAI model to use (default: gpt-4.1)
 
 ## How it works
 
 1. Fetches the existing PR template and code diff from GitHub
-2. Sends both to OpenAI's GPT-4 to generate a detailed description
+2. Sends both to the specified OpenAI model (default: gpt-4.1) to generate a detailed description
 3. Updates the PR body on GitHub with the AI-generated content
 
 
