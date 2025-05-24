@@ -121,7 +121,7 @@ fun sendToOpenAiApi(prBody: String, diffContent: String, openAiApiKey: String, m
                 put("role", "user")
                 put(
                     "content",
-                    "Here is the pull request template:\n$prBody\n\nAnd here is the code diff:\n$diffContent\n\nPlease generate an updated and detailed pull request body based on these inputs."
+                    "Here is the pull request template:\n$prBody\n\nAnd here is the code diff:\n$diffContent\n\nPlease generate an updated and detailed pull request body based on these inputs. Do not change the titles in the template if they are provided."
                 )
             })
         }
