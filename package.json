@@ -1,0 +1,33 @@
+{
+  "bin": {
+    "pr-filler": "jdeploy-bundle/jdeploy.js"
+  },
+  "author": "theapache64",
+  "description": "A tool that automatically fills out GitHub pull request descriptions using AI by analyzing code diffs.",
+  "main": "index.js",
+  "preferGlobal": "true",
+  "repository": "https://github.com/theapache64/pr-filler",
+  "version": "1.0.0",
+  "jdeploy": {
+    "jdk": "false",
+    "javaVersion": "17",
+    "jar": "pr-filler.main.jar",
+    "javafx": "false",
+    "title": "pr-filler"
+  },
+  "dependencies": {
+    "command-exists-promise": "2.0.2",
+    "node-fetch": "2.6.7",
+    "tar": "4.4.8",
+    "yauzl": "2.10.0",
+    "shelljs": "0.8.4"
+  },
+  "license": "ISC",
+  "name": "pr-filler",
+  "files": [
+    "jdeploy-bundle"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
