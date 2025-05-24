@@ -226,7 +226,9 @@ private fun getPrBody(prUrl: String, githubApiKey: String): String {
 
         val bodyString = response.body.string()
         val json = JSONObject(bodyString)
-        json.getString("body") ?: throw Exception("PR body not found in response")
+        runCatching {
+            json.getString("body")
+        }.getOrNull() ?: ""
     } catch (e: Exception) {
         println("❌ Failed to fetch PR body: ${e.message}")
         error("Failed to fetch PR body: ${e.message}")
