@@ -11,7 +11,7 @@
   "jdeploy": {
     "jdk": "false",
     "javaVersion": "17",
-    "jar": "pr-filler.main.jar",
+    "jar": "build/libs/pr-filler.main.jar",
     "javafx": "false",
     "title": "pr-filler"
   },
