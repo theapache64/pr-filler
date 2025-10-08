@@ -3,7 +3,8 @@ plugins {
 }
 
 group = "io.github.theapache64"
-version = "1.0-SNAPSHOT"
+// [latest version - i promise!]
+version = "1.0.5"
 
 repositories {
     mavenCentral()
