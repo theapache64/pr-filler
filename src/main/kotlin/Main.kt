@@ -19,8 +19,8 @@ data class GitHubPrUrlComponents(
  * PR Filler: A tool to help fill out pull requests using OpenAI's API and GitHub's API.
  */
 fun main(args: Array<String>) {
-    // Welcome message
-    println("🙏🏼 Welcome to PR Filler!")
+    // [latest version - i promise!]
+    println("🙏🏼 Welcome to PR Filler! (v25.10.08.1)")
 
     // Parse command line args
     val parsedArgs = parseArgs(args)
