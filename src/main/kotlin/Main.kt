@@ -114,14 +114,14 @@ fun sendToOpenAiApi(prBody: String, diffContent: String, openAiApiKey: String, m
                 put("role", "system")
                 put(
                     "content",
-                    "You are an assistant that writes precise, well-documented pull request descriptions using code diffs and templates."
+                    "You are an assistant that writes precise and concise pull request descriptions using code diffs and optional given template. You always follow the template structure if provided. If no template is provided, create a concise PR description based on the code diff. Do not add any sections that are not present in the template. Always use markdown formatting where applicable. Remember be concise and to the point."
                 )
             })
             put(JSONObject().apply {
                 put("role", "user")
                 put(
                     "content",
-                    "Here is the pull request template:\n$prBody\n\nAnd here is the code diff:\n$diffContent\n\nPlease generate an updated and detailed pull request body based on these inputs. Do not change the titles in the template if they are provided."
+                    "Here is the pull request template:\n$prBody\n\nAnd here is the code diff:\n$diffContent\n\n"
                 )
             })
         }
