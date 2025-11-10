@@ -20,7 +20,7 @@ data class GitHubPrUrlComponents(
  */
 fun main(args: Array<String>) {
     // [latest version - i promise!]
-    println("🙏🏼 Welcome to PR Filler! (v1.0.6)")
+    println("🙏🏼 Welcome to PR Filler! (v1.0.7)")
 
     // Parse command line args
     val parsedArgs = parseArgs(args)
@@ -47,8 +47,8 @@ fun main(args: Array<String>) {
         return
     }
 
-    val openAiApiKey = System.getenv("OPEN_AI_API_KEY") ?: run {
-        println("🔑 OPEN_AI_API_KEY environment variable not set. Exiting.")
+    val openAiApiKey = System.getenv("OPENAI_API_KEY") ?: run {
+        println("🔑 OPENAI_API_KEY environment variable not set. Exiting.")
         return
     }
 

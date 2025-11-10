@@ -25,7 +25,7 @@ Set the following environment variables:
 
 ```bash
 export GITHUB_ACCESS_TOKEN="your_github_token"
-export OPEN_AI_API_KEY="your_openai_api_key"
+export OPENAI_API_KEY="your_openai_api_key"
 ```
 
 ## Usage
