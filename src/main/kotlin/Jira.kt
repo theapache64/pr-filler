@@ -17,7 +17,7 @@ fun updateJira(prUrl: String) {
     val jiraTicketId = extractJiraTicketId(prUrl) ?: error("JIRA ticket ID not found in PR URL")
 
 
-    if (!confirmAction("Set JIRA Ticket ${jConfig?.baseUrl}/$jiraTicketId status to 'Verify'")) {
+    if (!confirmAction("Set JIRA Ticket ${jConfig?.baseUrl}/browse/$jiraTicketId status to 'Verify'")) {
         println("⏭️  Skipped setting status to Verify")
         return
     }
@@ -128,7 +128,7 @@ private fun handleSubtaskCompletion(
     if (subtasks != null && areAllSubtasksComplete(subtasks)) {
         println("✅ All subtasks are complete.")
 
-        if (confirmAction("Update parent ${jConfig?.baseUrl}/$parentKey to Verify status")) {
+        if (confirmAction("Update parent ${jConfig?.baseUrl}/browse/$parentKey to Verify status")) {
             transitionJiraIssue(parentKey, "Verify", config)
             println("✅ Parent $parentKey updated to Verify status.")
         } else {
@@ -157,7 +157,7 @@ private fun updateSolutionFieldIfConfirmed(
     config: JiraConfig,
     ticketType: String
 ) {
-    if (confirmAction("Update Solution/Implementation field for $ticketType ${jConfig?.baseUrl}/$ticketId")) {
+    if (confirmAction("Update Solution/Implementation field for $ticketType ${jConfig?.baseUrl}/browse/$ticketId")) {
         setSolutionField(prUrl, ticketId, config)
     } else {
         println("⏭️  Skipped updating solution field for $ticketType")
