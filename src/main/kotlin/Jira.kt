@@ -41,75 +41,62 @@ private fun confirmAction(actionDescription: String): Boolean {
     return input.isEmpty() || (input != "s" && input != "skip")
 }
 
-fun setStatusToVerify(prUrl: String, jiraTicketId: String) {
+/**
+ * Data class to hold Jira credentials and configuration
+ */
+private data class JiraConfig(
+    val email: String,
+    val apiToken: String,
+    val baseUrl: String = "https://hotstar.atlassian.net"
+)
+
+/**
+ * Gets Jira configuration from environment variables
+ * @return JiraConfig if credentials are available, null otherwise
+ */
+private fun getJiraConfig(): JiraConfig? {
     val jiraEmail = System.getenv("JIRA_USERNAME") ?: run {
         println("⚠️ JIRA_USERNAME environment variable not set. Skipping Jira status update.")
-        return
+        return null
     }
     val jiraApiToken = System.getenv("JIRA_API_TOKEN") ?: run {
         println("⚠️ JIRA_API_TOKEN environment variable not set. Skipping Jira status update.")
-        return
+        return null
     }
-    val jiraBaseUrl = "https://hotstar.atlassian.net"
+    return JiraConfig(jiraEmail, jiraApiToken)
+}
+
+/**
+ * Creates basic auth credentials for Jira API
+ */
+private fun JiraConfig.getCredentials(): String = Credentials.basic(email, apiToken)
+
+/**
+ * Builds a Jira API request with standard headers
+ */
+private fun buildJiraRequest(url: String, credentials: String): Request.Builder {
+    return Request.Builder()
+        .url(url)
+        .header("Authorization", credentials)
+        .header("Accept", "application/json")
+}
+
+fun setStatusToVerify(prUrl: String, jiraTicketId: String) {
+    val config = getJiraConfig() ?: return
 
     try {
         // Get issue details to check if it's a subtask and get current status
-        val issueDetails = getJiraIssue(jiraTicketId, jiraBaseUrl, jiraEmail, jiraApiToken)
+        val issueDetails = getJiraIssue(jiraTicketId, config)
 
         // Transition current issue to "Verify" status
-        transitionJiraIssue(jiraTicketId, "Verify", jiraBaseUrl, jiraEmail, jiraApiToken)
+        transitionJiraIssue(jiraTicketId, "Verify", config)
 
         // Check if this is a subtask
         val parentKey = issueDetails.optJSONObject("fields")?.optJSONObject("parent")?.optString("key")
         if (parentKey != null) {
-            println("🔍 Ticket $jiraTicketId is a subtask of $parentKey")
-
-            // Get all subtasks of the parent
-            val parentDetails = getJiraIssue(parentKey, jiraBaseUrl, jiraEmail, jiraApiToken)
-            val subtasks = parentDetails.getJSONObject("fields").optJSONArray("subtasks")
-
-            if (subtasks != null) {
-                var allSubtasksDone = true
-
-                for (i in 0 until subtasks.length()) {
-                    val subtask = subtasks.getJSONObject(i)
-                    val subtaskKey = subtask.getString("key")
-                    val subtaskFields = subtask.getJSONObject("fields")
-                    val subtaskStatus = subtaskFields.getJSONObject("status").getString("name")
-
-                    println("   Subtask $subtaskKey status: $subtaskStatus")
-
-                    // Consider subtask done if status is "Done", "Verify", "Closed", or similar completion statuses
-                    if (!isCompletionStatus(subtaskStatus)) {
-                        allSubtasksDone = false
-                    }
-                }
-
-                if (allSubtasksDone) {
-                    println("✅ All subtasks are complete.")
-
-                    if (confirmAction("Update parent $parentKey to Verify status")) {
-                        transitionJiraIssue(parentKey, "Verify", jiraBaseUrl, jiraEmail, jiraApiToken)
-                        println("✅ Parent $parentKey updated to Verify status.")
-                    } else {
-                        println("⏭️  Skipped updating parent status")
-                    }
-
-                    if (confirmAction("Update Solution/Implementation field for parent $parentKey")) {
-                        setSolutionField(prUrl, jiraBaseUrl, parentKey, jiraEmail, jiraApiToken)
-                    } else {
-                        println("⏭️  Skipped updating solution field for parent")
-                    }
-                } else {
-                    println("⏳ Not all subtasks are complete yet. Parent status will not be updated.")
-                }
-            }
+            handleSubtaskCompletion(prUrl, jiraTicketId, parentKey, config)
         } else {
-            if (confirmAction("Update Solution/Implementation field for $jiraTicketId")) {
-                setSolutionField(prUrl, jiraBaseUrl, jiraTicketId, jiraEmail, jiraApiToken)
-            } else {
-                println("⏭️  Skipped updating solution field")
-            }
+            handleRegularTicket(prUrl, jiraTicketId, config)
         }
 
     } catch (e: Exception) {
@@ -117,20 +104,121 @@ fun setStatusToVerify(prUrl: String, jiraTicketId: String) {
     }
 }
 
+/**
+ * Handles the case when all subtasks are complete
+ */
+private fun handleSubtaskCompletion(
+    prUrl: String,
+    jiraTicketId: String,
+    parentKey: String,
+    config: JiraConfig
+) {
+    println("🔍 Ticket $jiraTicketId is a subtask of $parentKey")
+
+    // Get all subtasks of the parent
+    val parentDetails = getJiraIssue(parentKey, config)
+    val subtasks = parentDetails.getJSONObject("fields").optJSONArray("subtasks")
+
+    if (subtasks != null && areAllSubtasksComplete(subtasks)) {
+        println("✅ All subtasks are complete.")
+
+        if (confirmAction("Update parent $parentKey to Verify status")) {
+            transitionJiraIssue(parentKey, "Verify", config)
+            println("✅ Parent $parentKey updated to Verify status.")
+        } else {
+            println("⏭️  Skipped updating parent status")
+        }
+
+        updateSolutionFieldIfConfirmed(prUrl, parentKey, config, "parent")
+    } else {
+        println("⏳ Not all subtasks are complete yet. Parent status will not be updated.")
+    }
+}
+
+/**
+ * Handles updating solution field for regular (non-subtask) tickets
+ */
+private fun handleRegularTicket(prUrl: String, jiraTicketId: String, config: JiraConfig) {
+    updateSolutionFieldIfConfirmed(prUrl, jiraTicketId, config, "ticket")
+}
+
+/**
+ * Prompts for confirmation and updates solution field if confirmed
+ */
+private fun updateSolutionFieldIfConfirmed(
+    prUrl: String,
+    ticketId: String,
+    config: JiraConfig,
+    ticketType: String
+) {
+    if (confirmAction("Update Solution/Implementation field for $ticketType $ticketId")) {
+        setSolutionField(prUrl, ticketId, config)
+    } else {
+        println("⏭️  Skipped updating solution field for $ticketType")
+    }
+}
+
+/**
+ * Checks if all subtasks are in a completion status
+ */
+private fun areAllSubtasksComplete(subtasks: JSONArray): Boolean {
+    var allComplete = true
+
+    for (i in 0 until subtasks.length()) {
+        val subtask = subtasks.getJSONObject(i)
+        val subtaskKey = subtask.getString("key")
+        val subtaskStatus = subtask.getJSONObject("fields")
+            .getJSONObject("status")
+            .getString("name")
+
+        println("   Subtask $subtaskKey status: $subtaskStatus")
+
+        if (!isCompletionStatus(subtaskStatus)) {
+            allComplete = false
+        }
+    }
+
+    return allComplete
+}
+
 private fun setSolutionField(
     prUrl: String,
-    jiraBaseUrl: String,
     jiraTicketId: String,
-    jiraEmail: String,
-    jiraApiToken: String,
+    config: JiraConfig
 ) {
     val solutionFieldId = "customfield_13015"
     val client = OkHttpClient()
-    val credentials = Credentials.basic(jiraEmail, jiraApiToken)
+    val credentials = config.getCredentials()
 
-    // Step 1: Fetch the current issue to get existing solution field content
+    try {
+        // Fetch current field content
+        val existingContent = fetchExistingSolutionContent(jiraTicketId, solutionFieldId, config, client, credentials)
+
+        // Create and append new paragraph
+        val newParagraph = createPrLinkParagraph(prUrl)
+        existingContent.put(newParagraph)
+
+        // Build and send update
+        val adfContent = buildAdfDocument(existingContent)
+        updateSolutionFieldOnJira(jiraTicketId, solutionFieldId, adfContent, config, client, credentials)
+
+    } catch (e: Exception) {
+        println("⚠️ Error updating solution field: ${e.message}")
+    }
+}
+
+/**
+ * Fetches existing solution field content from Jira
+ */
+private fun fetchExistingSolutionContent(
+    jiraTicketId: String,
+    solutionFieldId: String,
+    config: JiraConfig,
+    client: OkHttpClient,
+    credentials: String
+): JSONArray {
     val getRequest = Request.Builder()
-        .url("$jiraBaseUrl/rest/api/3/issue/$jiraTicketId?fields=$solutionFieldId")
+        .url("${config.baseUrl}/rest/api/3/issue/$jiraTicketId?fields=$solutionFieldId")
         .get()
         .header("Authorization", credentials)
         .build()
@@ -138,75 +226,99 @@ private fun setSolutionField(
     val getResponse = client.newCall(getRequest).execute()
     if (!getResponse.isSuccessful) {
         println("⚠️ Failed to fetch current field for $jiraTicketId: ${getResponse.code}")
-        return
+        return JSONArray()
     }
 
-    // Step 2: Parse existing ADF content
-    val responseBody = getResponse.body?.string()
     val existingContent = JSONArray()
-
     try {
+        val responseBody = getResponse.body?.string()
         val issueJson = JSONObject(responseBody ?: "{}")
         val existingAdf = issueJson.optJSONObject("fields")
             ?.optJSONObject(solutionFieldId)
 
-        if (existingAdf != null) {
-            val existingContentArray = existingAdf.optJSONArray("content")
-            if (existingContentArray != null) {
-                for (i in 0 until existingContentArray.length()) {
-                    existingContent.put(existingContentArray.get(i))
-                }
+        existingAdf?.optJSONArray("content")?.let { contentArray ->
+            for (i in 0 until contentArray.length()) {
+                existingContent.put(contentArray.get(i))
             }
         }
     } catch (e: Exception) {
         println("⚠️ Error parsing existing content: ${e.message}")
     }
 
-    // Step 3: Create new paragraph with PR link
-    val newParagraph = JSONObject().apply {
+    return existingContent
+}
+
+/**
+ * Creates a paragraph with PR link in Atlassian Document Format (ADF)
+ */
+private fun createPrLinkParagraph(prUrl: String): JSONObject {
+    return JSONObject().apply {
         put("type", "paragraph")
         put("content", JSONArray().apply {
+            put(createTextNode("See "))
+            put(createLinkNode(prUrl, prUrl))
+            put(createTextNode("'s description"))
+        })
+    }
+}
+
+/**
+ * Creates a text node for ADF
+ */
+private fun createTextNode(text: String): JSONObject {
+    return JSONObject().apply {
+        put("type", "text")
+        put("text", text)
+    }
+}
+
+/**
+ * Creates a link node for ADF
+ */
+private fun createLinkNode(text: String, href: String): JSONObject {
+    return JSONObject().apply {
+        put("type", "text")
+        put("text", text)
+        put("marks", JSONArray().apply {
             put(JSONObject().apply {
-                put("type", "text")
-                put("text", "See ")
-            })
-            put(JSONObject().apply {
-                put("type", "text")
-                put("text", prUrl)
-                put("marks", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("type", "link")
-                        put("attrs", JSONObject().apply {
-                            put("href", prUrl)
-                        })
-                    })
+                put("type", "link")
+                put("attrs", JSONObject().apply {
+                    put("href", href)
                 })
-            })
-            put(JSONObject().apply {
-                put("type", "text")
-                put("text", "'s description")
             })
         })
     }
+}
 
-    // Step 4: Append new paragraph to existing content
-    existingContent.put(newParagraph)
-
-    // Step 5: Build complete ADF document
-    val adfContent = JSONObject().apply {
+/**
+ * Builds complete ADF document structure
+ */
+private fun buildAdfDocument(content: JSONArray): JSONObject {
+    return JSONObject().apply {
         put("version", 1)
         put("type", "doc")
-        put("content", existingContent)
+        put("content", content)
     }
+}
 
+/**
+ * Updates the solution field on Jira with the given ADF content
+ */
+private fun updateSolutionFieldOnJira(
+    jiraTicketId: String,
+    solutionFieldId: String,
+    adfContent: JSONObject,
+    config: JiraConfig,
+    client: OkHttpClient,
+    credentials: String
+) {
     val solutionUpdateBody = JSONObject().apply {
         put("fields", JSONObject().apply {
             put(solutionFieldId, adfContent)
         })
     }
 
-    // Step 6: Send PUT request to update the field
-    val apiUrl = "$jiraBaseUrl/rest/api/3/issue/$jiraTicketId"
+    val apiUrl = "${config.baseUrl}/rest/api/3/issue/$jiraTicketId"
     val updateRequest = Request.Builder()
         .url(apiUrl)
         .put(solutionUpdateBody.toString().toRequestBody("application/json".toMediaType()))
@@ -214,11 +326,7 @@ private fun setSolutionField(
         .header("Content-Type", "application/json")
         .build()
 
-    /*val curl = "curl -X PUT '$apiUrl' \\\n" +
-            "  -H 'Authorization: Basic ${java.util.Base64.getEncoder().encodeToString("$jiraEmail:$jiraApiToken".toByteArray())}' \\\n" +
-            "  -H 'Content-Type: application/json' \\\n" +
-            "  -d '${solutionUpdateBody.toString()}'"
-    println("🔧 Curl for updating 'Solution / Implementation' field:\n$curl")*/
+    // printCurlCommand(apiUrl, config, solutionUpdateBody)
 
     val updateResponse = client.newCall(updateRequest).execute()
     if (!updateResponse.isSuccessful) {
@@ -229,6 +337,23 @@ private fun setSolutionField(
     }
 }
 
+/**
+ * Prints curl command for debugging purposes
+ */
+private fun printCurlCommand(apiUrl: String, config: JiraConfig, body: JSONObject) {
+    val authString = "${config.email}:${config.apiToken}"
+    val encodedAuth = java.util.Base64.getEncoder().encodeToString(authString.toByteArray())
+
+    val curl = """
+        curl -X PUT '$apiUrl' \
+          -H 'Authorization: Basic $encodedAuth' \
+          -H 'Content-Type: application/json' \
+          -d '${body.toString()}'
+    """.trimIndent()
+
+    println("🔧 Curl for updating 'Solution / Implementation' field:\n$curl")
+}
+
 private fun isCompletionStatus(status: String): Boolean {
     val completionStatuses = setOf("done", "verify", "closed", "resolved", "completed")
     return completionStatuses.contains(status.lowercase())
@@ -236,82 +361,88 @@ private fun isCompletionStatus(status: String): Boolean {
 
 private fun getJiraIssue(
     issueKey: String,
-    jiraBaseUrl: String,
-    jiraEmail: String,
-    jiraApiToken: String,
-): org.json.JSONObject {
-    val apiUrl = "$jiraBaseUrl/rest/api/3/issue/$issueKey"
+    config: JiraConfig
+): JSONObject {
+    val apiUrl = "${config.baseUrl}/rest/api/3/issue/$issueKey"
+    val credentials = config.getCredentials()
 
-    val credentials = okhttp3.Credentials.basic(jiraEmail, jiraApiToken)
-    val request = okhttp3.Request.Builder()
-        .url(apiUrl)
-        .header("Authorization", credentials)
-        .header("Accept", "application/json")
-        .build()
-
-    val client = okhttp3.OkHttpClient()
+    val request = buildJiraRequest(apiUrl, credentials).build()
+    val client = OkHttpClient()
     val response = client.newCall(request).execute()
 
     if (!response.isSuccessful) {
         throw Exception("Failed to fetch Jira issue $issueKey: ${response.code} ${response.message}")
     }
 
-    return org.json.JSONObject(response.body.string())
+    return JSONObject(response.body.string())
 }
 
 private fun transitionJiraIssue(
     issueKey: String,
     targetStatus: String,
-    jiraBaseUrl: String,
-    jiraEmail: String,
-    jiraApiToken: String,
+    config: JiraConfig
 ) {
-    // First, get available transitions for the issue
-    val transitionsUrl = "$jiraBaseUrl/rest/api/3/issue/$issueKey/transitions"
-    val credentials = okhttp3.Credentials.basic(jiraEmail, jiraApiToken)
+    val transitionsUrl = "${config.baseUrl}/rest/api/3/issue/$issueKey/transitions"
+    val credentials = config.getCredentials()
+    val client = OkHttpClient()
 
-    val getTransitionsRequest = okhttp3.Request.Builder()
-        .url(transitionsUrl)
-        .header("Authorization", credentials)
-        .header("Accept", "application/json")
-        .build()
-
-    val client = okhttp3.OkHttpClient()
+    // Get available transitions
+    val getTransitionsRequest = buildJiraRequest(transitionsUrl, credentials).build()
     val transitionsResponse = client.newCall(getTransitionsRequest).execute()
 
     if (!transitionsResponse.isSuccessful) {
         throw Exception("Failed to fetch transitions for $issueKey: ${transitionsResponse.code}")
     }
 
-    val transitionsJson = org.json.JSONObject(transitionsResponse.body.string())
+    val transitionsJson = JSONObject(transitionsResponse.body.string())
     val transitions = transitionsJson.getJSONArray("transitions")
 
     // Find the transition ID for the target status
-    var transitionId: String? = null
+    val transitionId = findTransitionId(transitions, targetStatus, issueKey) ?: return
+
+    // Perform the transition
+    performTransition(issueKey, transitionId, transitionsUrl, credentials, client)
+}
+
+/**
+ * Finds the transition ID for a target status
+ */
+private fun findTransitionId(
+    transitions: JSONArray,
+    targetStatus: String,
+    issueKey: String
+): String? {
     for (i in 0 until transitions.length()) {
         val transition = transitions.getJSONObject(i)
         val toStatus = transition.getJSONObject("to").getString("name")
         if (toStatus.equals(targetStatus, ignoreCase = true)) {
-            transitionId = transition.getString("id")
-            break
+            return transition.getString("id")
         }
     }
 
-    if (transitionId == null) {
-        println("⚠️ No transition to '$targetStatus' found for issue $issueKey. Available transitions:")
-        for (i in 0 until transitions.length()) {
-            val transition = transitions.getJSONObject(i)
-            println("   - ${transition.getJSONObject("to").getString("name")}")
-        }
-        return
+    println("⚠️ No transition to '$targetStatus' found for issue $issueKey. Available transitions:")
+    for (i in 0 until transitions.length()) {
+        val transition = transitions.getJSONObject(i)
+        println("   - ${transition.getJSONObject("to").getString("name")}")
+    }
+    return null
+}
+
+/**
+ * Performs a Jira transition
+ */
+private fun performTransition(
+    issueKey: String,
+    transitionId: String,
+    transitionsUrl: String,
+    credentials: String,
+    client: OkHttpClient
+) {
+    val transitionBody = JSONObject().apply {
+        put("transition", JSONObject().put("id", transitionId))
     }
 
-    // Perform the transition
-    val transitionBody = org.json.JSONObject().apply {
-        put("transition", org.json.JSONObject().put("id", transitionId))
-    }
-
-    val transitionRequest = okhttp3.Request.Builder()
+    val transitionRequest = Request.Builder()
         .url(transitionsUrl)
         .post(transitionBody.toString().toRequestBody("application/json".toMediaType()))
         .header("Authorization", credentials)
@@ -322,28 +453,49 @@ private fun transitionJiraIssue(
 
     if (!transitionResponse.isSuccessful) {
         val errorBody = transitionResponse.body.string()
-        throw Exception("Failed to transition $issueKey to $targetStatus: ${transitionResponse.code}. Details: $errorBody")
+        throw Exception("Failed to transition $issueKey: ${transitionResponse.code}. Details: $errorBody")
     }
 
-    println("✅ Successfully transitioned $issueKey to $targetStatus")
+    println("✅ Successfully transitioned $issueKey")
 }
 
 fun extractJiraTicketId(prUrl: String): String? {
     val githubApiKey = System.getenv("GITHUB_ACCESS_TOKEN") ?: return null
 
-    // Parse PR URL to extract owner, repo, and PR number
+    val prDetails = parsePrUrl(prUrl) ?: return null
+    val branchName = fetchBranchNameFromGitHub(prDetails, githubApiKey) ?: return null
+
+    return extractTicketIdFromBranch(branchName)
+}
+
+/**
+ * Data class to hold PR details
+ */
+private data class PrDetails(val owner: String, val repo: String, val prNumber: String)
+
+/**
+ * Parses GitHub PR URL to extract owner, repo, and PR number
+ */
+private fun parsePrUrl(prUrl: String): PrDetails? {
     val urlParts = prUrl.split("/")
     if (urlParts.size < 7 || !prUrl.contains("github.com")) {
         return null
     }
 
-    val owner = urlParts[3]
-    val repo = urlParts[4]
-    val prNumber = urlParts[6]
+    return PrDetails(
+        owner = urlParts[3],
+        repo = urlParts[4],
+        prNumber = urlParts[6]
+    )
+}
 
-    // Fetch PR details from GitHub API
-    val apiUrl = "https://api.github.com/repos/$owner/$repo/pulls/$prNumber"
-    val request = okhttp3.Request.Builder()
+/**
+ * Fetches branch name from GitHub API
+ */
+private fun fetchBranchNameFromGitHub(prDetails: PrDetails, githubApiKey: String): String? {
+    val apiUrl = "https://api.github.com/repos/${prDetails.owner}/${prDetails.repo}/pulls/${prDetails.prNumber}"
+
+    val request = Request.Builder()
         .url(apiUrl)
         .header("Authorization", "Bearer $githubApiKey")
         .header("Accept", "application/vnd.github.v3+json")
@@ -359,16 +511,18 @@ fun extractJiraTicketId(prUrl: String): String? {
         }
 
         val responseBody = response.body.string()
-        val json = org.json.JSONObject(responseBody)
-
-        // Extract branch name from the "head" ref
-        val branchName = json.getJSONObject("head").getString("ref")
-
-        // Extract Jira ticket ID using regex pattern (e.g., AF-14934)
-        val jiraTicketPattern = Regex("[A-Z]+-\\d+")
-        jiraTicketPattern.find(branchName)?.value
+        val json = JSONObject(responseBody)
+        json.getJSONObject("head").getString("ref")
     } catch (e: Exception) {
-        println("❌ Error extracting Jira ticket ID: ${e.message}")
+        println("❌ Error fetching branch name: ${e.message}")
         null
     }
+}
+
+/**
+ * Extracts Jira ticket ID from branch name using regex
+ */
+private fun extractTicketIdFromBranch(branchName: String): String? {
+    val jiraTicketPattern = Regex("[A-Z]+-\\d+")
+    return jiraTicketPattern.find(branchName)?.value
 }
