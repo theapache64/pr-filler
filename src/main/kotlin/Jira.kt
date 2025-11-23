@@ -47,7 +47,7 @@ private fun confirmAction(actionDescription: String): Boolean {
 private data class JiraConfig(
     val email: String,
     val apiToken: String,
-    val baseUrl: String = "https://hotstar.atlassian.net"
+    val baseUrl: String
 )
 
 /**
@@ -63,7 +63,11 @@ private fun getJiraConfig(): JiraConfig? {
         println("⚠️ JIRA_API_TOKEN environment variable not set. Skipping Jira status update.")
         return null
     }
-    return JiraConfig(jiraEmail, jiraApiToken)
+    val jiraBaseUrl = System.getenv("JIRA_BASE_URL") ?: run {
+        println("⚠️ JIRA_BASE_URL environment variable not set. Skipping Jira status update.")
+        return null
+    }
+    return JiraConfig(jiraEmail, jiraApiToken, jiraBaseUrl)
 }
 
 /**
