@@ -15,7 +15,7 @@ fun updateJira(prUrl: String) {
 
     // Get JIRA ticket ID from PR URL
     val jiraTicketId = extractJiraTicketId(prUrl) ?: error("JIRA ticket ID not found in PR URL")
-
+    println("🔍 Found JIRA Ticket ID: $jiraTicketId")
 
     if (!confirmAction("Set JIRA Ticket ${jConfig?.baseUrl}/browse/$jiraTicketId status to 'Verify'")) {
         println("⏭️  Skipped setting status to Verify")
