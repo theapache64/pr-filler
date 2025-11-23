@@ -15,9 +15,9 @@ fun updateJira(prUrl: String) {
 
     // Get JIRA ticket ID from PR URL
     val jiraTicketId = extractJiraTicketId(prUrl) ?: error("JIRA ticket ID not found in PR URL")
-    println("QuickTag: :updateJira: Found JIRA Ticket ID: $jiraTicketId")
 
-    if (!confirmAction("Set JIRA Ticket $jiraTicketId status to 'Verify'")) {
+
+    if (!confirmAction("Set JIRA Ticket ${jConfig?.baseUrl}/$jiraTicketId status to 'Verify'")) {
         println("⏭️  Skipped setting status to Verify")
         return
     }
@@ -44,7 +44,7 @@ private fun confirmAction(actionDescription: String): Boolean {
 /**
  * Data class to hold Jira credentials and configuration
  */
-private data class JiraConfig(
+data class JiraConfig(
     val email: String,
     val apiToken: String,
     val baseUrl: String
@@ -69,6 +69,8 @@ private fun getJiraConfig(): JiraConfig? {
     }
     return JiraConfig(jiraEmail, jiraApiToken, jiraBaseUrl)
 }
+
+val jConfig = getJiraConfig()
 
 /**
  * Creates basic auth credentials for Jira API
@@ -126,7 +128,7 @@ private fun handleSubtaskCompletion(
     if (subtasks != null && areAllSubtasksComplete(subtasks)) {
         println("✅ All subtasks are complete.")
 
-        if (confirmAction("Update parent $parentKey to Verify status")) {
+        if (confirmAction("Update parent ${jConfig?.baseUrl}/$parentKey to Verify status")) {
             transitionJiraIssue(parentKey, "Verify", config)
             println("✅ Parent $parentKey updated to Verify status.")
         } else {
@@ -155,7 +157,7 @@ private fun updateSolutionFieldIfConfirmed(
     config: JiraConfig,
     ticketType: String
 ) {
-    if (confirmAction("Update Solution/Implementation field for $ticketType $ticketId")) {
+    if (confirmAction("Update Solution/Implementation field for $ticketType ${jConfig?.baseUrl}/$ticketId")) {
         setSolutionField(prUrl, ticketId, config)
     } else {
         println("⏭️  Skipped updating solution field for $ticketType")
