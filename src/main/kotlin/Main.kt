@@ -73,9 +73,13 @@ fun main(args: Array<String>) {
     // Update the PR body on GitHub
     updatePrBody(prUrl, filledPrBody, githubApiKey)
 
+    updateJira(prUrl)
+
     // Print PR URL
     println("🔗 PR URL: $prUrl")
 }
+
+
 
 fun updatePrBody(prUrl: String, filledPrBody: String, githubApiKey: String) {
     val (owner, repo, prNumber) = parseGitHubPrUrl(prUrl)
