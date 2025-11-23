@@ -5,7 +5,7 @@
     "main": "index.js",
     "preferGlobal": "true",
     "repository": "https://github.com/theapache64/pr-filler",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "jdeploy": {
         "jdk": "false",
         "javaVersion": "17",
