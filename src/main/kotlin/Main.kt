@@ -20,7 +20,7 @@ data class GitHubPrUrlComponents(
  */
 fun main(args: Array<String>) {
     // [latest version - i promise!]
-    println("🙏🏼 Welcome to PR Filler! (v1.0.13)")
+    println("🙏🏼 Welcome to PR Filler! (v1.0.14)")
 
     // Parse command line args
     val parsedArgs = parseArgs(args)

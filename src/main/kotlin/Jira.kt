@@ -99,7 +99,11 @@ fun setStatusToVerify(prUrl: String, jiraTicketId: String) {
 
         // Check if this is a subtask
         val parentKey = issueDetails.optJSONObject("fields")?.optJSONObject("parent")?.optString("key")
-        if (parentKey != null) {
+        val isStory = issueDetails.optJSONObject("fields")
+            ?.optJSONObject("issuetype")
+            ?.optString("name")
+            ?.equals("Story", ignoreCase = true) ?: false
+        if (parentKey != null && !isStory) {
             handleSubtaskCompletion(prUrl, jiraTicketId, parentKey, config)
         } else {
             handleRegularTicket(prUrl, jiraTicketId, config)
