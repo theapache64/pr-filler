@@ -5,6 +5,6 @@ class JiraTest {
 
     @Test
     fun jira(){
-        updateJira("https://github.com/hotstar/hotstar-android-livingroom/pull/4800")
+        updateJira("https://github.com/hotstar/hotstar-android-livingroom/pull/4818")
     }
 }

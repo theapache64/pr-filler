@@ -37,7 +37,7 @@ private fun confirmAction(actionDescription: String): Boolean {
     println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     println("Press ENTER to continue, or type 's' to skip: ")
 
-    val input = readLine()?.trim()?.lowercase() ?: ""
+    val input = readLine()?.trim()?.lowercase() ?: "s"
     return input.isEmpty() || (input != "s" && input != "skip")
 }
 
@@ -103,6 +103,7 @@ fun setStatusToVerify(prUrl: String, jiraTicketId: String) {
             ?.optJSONObject("issuetype")
             ?.optString("name")
             ?.equals("Story", ignoreCase = true) ?: false
+        println("🔍 Is subtask: ${parentKey != null}, Is Story: $isStory")
         if (parentKey != null && !isStory) {
             handleSubtaskCompletion(prUrl, jiraTicketId, parentKey, config)
         } else {
